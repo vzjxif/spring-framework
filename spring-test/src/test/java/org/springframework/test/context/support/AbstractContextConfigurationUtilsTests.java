@@ -94,10 +94,11 @@ abstract class AbstractContextConfigurationUtilsTests {
 		assertThat(mergedConfig).isNotNull();
 		assertThat(mergedConfig.getTestClass()).isEqualTo(expectedTestClass);
 		assertThat(mergedConfig.getLocations()).isNotNull();
-		assertThat(mergedConfig.getLocations()).isEqualTo(expectedLocations);
+		assertThat(mergedConfig.getLocations()).containsExactly(expectedLocations);
 		assertThat(mergedConfig.getClasses()).isNotNull();
-		assertThat(mergedConfig.getClasses()).isEqualTo(expectedClasses);
+		assertThat(mergedConfig.getClasses()).containsExactly(expectedClasses);
 		assertThat(mergedConfig.getActiveProfiles()).isNotNull();
+
 		if (expectedContextLoaderClass == null) {
 			assertThat(mergedConfig.getContextLoader()).isNull();
 		}
@@ -215,6 +216,25 @@ abstract class AbstractContextConfigurationUtilsTests {
 	@ContextConfiguration(classes = FooConfig.class, loader = GenericPropertiesContextLoader.class)
 	@ActiveProfiles("foo")
 	static class PropertiesClassesFoo {
+	}
+
+	@ContextConfiguration(classes = FooConfig.class, loader = AnnotationConfigContextLoader.class)
+	@ActiveProfiles("foo")
+	static class OuterTestCase {
+
+		class NestedTestCaseWithInheritedConfig {
+		}
+
+		@ContextConfiguration(classes = BarConfig.class)
+		@ActiveProfiles("bar")
+		class NestedTestCaseWithMergedInheritedConfig {
+		}
+
+		@ContextConfiguration(classes = BarConfig.class, inheritLocations = false)
+		@ActiveProfiles(profiles = "bar", inheritProfiles = false)
+		class NestedTestCaseWithOverriddenConfig {
+		}
+
 	}
 
 }
