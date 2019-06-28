@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
@@ -48,31 +49,66 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
+ * Unit tests for {@link FormHttpMessageConverter} and
+ * {@link AllEncompassingFormHttpMessageConverter}.
+ *
  * @author Arjen Poutsma
  * @author Rossen Stoyanchev
+ * @author Sam Brannen
  */
 public class FormHttpMessageConverterTests {
+
+	protected static final MediaType MULTIPART_MIXED = new MediaType("multipart", "mixed");
+	protected static final MediaType MULTIPART_RELATED = new MediaType("multipart", "related");
 
 	private final FormHttpMessageConverter converter = new AllEncompassingFormHttpMessageConverter();
 
 
 	@Test
 	public void canRead() {
-		assertThat(this.converter.canRead(MultiValueMap.class,
-		new MediaType("application", "x-www-form-urlencoded"))).isTrue();
-		assertThat(this.converter.canRead(MultiValueMap.class,
-		new MediaType("multipart", "form-data"))).isFalse();
+		assertThat(this.converter.canRead(MultiValueMap.class, MediaType.APPLICATION_FORM_URLENCODED)).isTrue();
+		assertThat(this.converter.canRead(MultiValueMap.class, MediaType.MULTIPART_FORM_DATA)).isFalse();
 	}
 
 	@Test
 	public void canWrite() {
-		assertThat(this.converter.canWrite(MultiValueMap.class,
-		new MediaType("application", "x-www-form-urlencoded"))).isTrue();
-		assertThat(this.converter.canWrite(MultiValueMap.class,
-		new MediaType("multipart", "form-data"))).isTrue();
-		assertThat(this.converter.canWrite(MultiValueMap.class,
-		new MediaType("multipart", "form-data", StandardCharsets.UTF_8))).isTrue();
-		assertThat(this.converter.canWrite(MultiValueMap.class, MediaType.ALL)).isTrue();
+		assertCanWrite(MediaType.APPLICATION_FORM_URLENCODED);
+		assertCanWrite(MediaType.MULTIPART_FORM_DATA);
+		assertCanWrite(new MediaType("multipart", "form-data", StandardCharsets.UTF_8));
+		assertCanWrite(MediaType.ALL);
+	}
+
+	@Test
+	public void setSupportedMediaTypes() {
+		assertCannotWrite(MULTIPART_MIXED);
+		assertCannotWrite(MULTIPART_RELATED);
+
+		List<MediaType> supportedMediaTypes = new ArrayList<>(this.converter.getSupportedMediaTypes());
+		supportedMediaTypes.add(MULTIPART_MIXED);
+		supportedMediaTypes.add(MULTIPART_RELATED);
+		this.converter.setSupportedMediaTypes(supportedMediaTypes);
+
+		assertCanWrite(MULTIPART_MIXED);
+		assertCanWrite(MULTIPART_RELATED);
+	}
+
+	@Test
+	public void addSupportedMediaTypes() {
+		assertCannotWrite(MULTIPART_MIXED);
+		assertCannotWrite(MULTIPART_RELATED);
+
+		this.converter.addSupportedMediaTypes(MULTIPART_MIXED, MULTIPART_RELATED);
+
+		assertCanWrite(MULTIPART_MIXED);
+		assertCanWrite(MULTIPART_RELATED);
+	}
+
+	private void assertCanWrite(MediaType mediaType) {
+		assertThat(this.converter.canWrite(MultiValueMap.class, mediaType)).isTrue();
+	}
+
+	private void assertCannotWrite(MediaType mediaType) {
+		assertThat(this.converter.canWrite(MultiValueMap.class, mediaType)).isFalse();
 	}
 
 	@Test
@@ -181,9 +217,7 @@ public class FormHttpMessageConverterTests {
 		verify(outputMessage.getBody(), never()).close();
 	}
 
-	// SPR-13309
-
-	@Test
+	@Test // SPR-13309
 	public void writeMultipartOrder() throws Exception {
 		MyBean myBean = new MyBean();
 		myBean.setString("foo");

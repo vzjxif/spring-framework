@@ -30,11 +30,15 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.fasterxml.jackson.annotation.JsonView;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
+import org.junit.runner.Description;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
+import org.junit.runners.model.Statement;
 
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.ClassPathResource;
@@ -60,19 +64,56 @@ import static org.junit.Assume.assumeFalse;
 import static org.springframework.http.HttpMethod.POST;
 
 /**
+ * Integration tests for {@link RestTemplate}.
+ *
  * @author Arjen Poutsma
  * @author Brian Clozel
+ * @author Sam Brannen
  */
 @RunWith(Parameterized.class)
 public class RestTemplateIntegrationTests extends AbstractMockWebServerTestCase {
 
 	private RestTemplate template;
 
+	/**
+	 * Custom JUnit 4 rule that executes the supplied {@code Statement} in a
+	 * try-catch block.
+	 *
+	 * <p>If the statement throws an {@link HttpServerErrorException}, this rule will
+	 * throw an {@link AssertionError} that wraps the {@code HttpServerErrorException}
+	 * using the {@link HttpServerErrorException#getResponseBodyAsString() response body}
+	 * as the failure message.
+	 *
+	 * <p>This mechanism provides an actually meaningful failure message if the
+	 * test fails due to an {@code AssertionError} on the server.
+	 */
+	@Rule
+	public TestRule serverErrorToAssertionErrorConverter = (Statement next, Description description) -> {
+		return new Statement() {
+
+			@Override
+			public void evaluate() throws Throwable {
+				try {
+					next.evaluate();
+				}
+				catch (HttpServerErrorException ex) {
+					String responseBody = ex.getResponseBodyAsString();
+					String prefix = AssertionError.class.getName() + ": ";
+					if (responseBody.startsWith(prefix)) {
+						responseBody = responseBody.substring(prefix.length());
+					}
+					throw new AssertionError(responseBody, ex);
+				}
+			}
+		};
+	};
+
+
 	@Parameter
 	public ClientHttpRequestFactory clientHttpRequestFactory;
 
 	@SuppressWarnings("deprecation")
-	@Parameters
+	@Parameters(name = "{0}")
 	public static Iterable<? extends ClientHttpRequestFactory> data() {
 		return Arrays.asList(
 				new SimpleClientHttpRequestFactory(),
